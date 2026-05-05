@@ -25,10 +25,17 @@ def run_serving(ticker='AAPL', period_mode='short'):
     # 2. 실전 테스트 데이터 주입 (외부 CSV 또는 최근 실시간 데이터)
     data_loader = MarketDataLoader(ticker)
     print(f"\n[2] {stock_name} 데이터 수집 및 지표 계산...")
-    # 여기서 pd.read_csv('test_data.csv') 등으로 외부 데이터를 주입할 수 있습니다.
-    # 데모를 위해 최근 6개월 치의 실시간 데이터를 Test 데이터로 취급하여 가져옵니다.
-    test_df = data_loader.fetch_data(months_ago_start=6, months_ago_end=0)
-    test_df = IndicatorEngine.calculate_all(test_df)
+    # EMA_120 등 장기 지표 계산을 위해 충분한 워밍업 데이터(18개월)를 가져옵니다.
+    # dropna 후에도 최근 6개월치 데이터가 충분히 남도록 넉넉히 수집합니다.
+    raw_df = data_loader.fetch_data(months_ago_start=18, months_ago_end=0)
+    full_df = IndicatorEngine.calculate_all(raw_df)
+    
+    # 지표 계산 후, 실제 분석/표시용으로 최근 6개월치만 슬라이싱
+    from datetime import datetime, timedelta
+    cutoff = datetime.now() - timedelta(days=30 * 6)
+    test_df = full_df[full_df.index >= cutoff]
+    if len(test_df) == 0:
+        test_df = full_df  # 혹시 6개월치도 없으면 전체 사용
     
     # 3. 알고리즘 기반 빠른 컨설팅 산출
     print("\n[3] 가중치 기반 알고리즘 분석 및 자연어 피드백 생성 중...")
@@ -62,4 +69,4 @@ def run_serving(ticker='AAPL', period_mode='short'):
 
 if __name__ == "__main__":
     # 사용자가 배포 후 실행하는 서비스 로직
-    run_serving(ticker='005930.KS', period_mode='short')
+    run_serving(ticker='DE', period_mode='short')

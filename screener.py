@@ -25,20 +25,26 @@ class StockScreener:
         for ticker in tqdm(self.tickers, desc="검색 진행률", unit="종목"):
             
             try:
-                # 데이터 수집 (스크리닝 용이므로 너무 길지 않은 3개월치(약 60영업일) 가져옵니다. 단, 120일 이평선을 위해 6개월치로 설정)
+                # EMA_120 계산 워밍업을 위해 18개월치를 수집하고, 지표 계산 후 최근 6개월만 사용
                 loader = MarketDataLoader(ticker)
                 
                 # yfinance 진행바 숨김 처리를 위해 조용히 다운로드
-                import contextlib
-                import io
+                import contextlib, io
+                from datetime import datetime, timedelta
                 with contextlib.redirect_stdout(io.StringIO()):
-                    df = loader.fetch_data(months_ago_start=12, months_ago_end=0)
+                    raw_df = loader.fetch_data(months_ago_start=18, months_ago_end=0)
                 
-                if len(df) < 120:
-                    continue # 데이터가 충분하지 않음
+                if len(raw_df) < 120:
+                    continue  # raw 데이터 자체가 부족
                     
-                # 보조지표 계산
-                df = IndicatorEngine.calculate_all(df)
+                # 보조지표 계산 (dropna 후 EMA_120 유효 구간만 남음)
+                full_df = IndicatorEngine.calculate_all(raw_df)
+                
+                # 최근 6개월치만 슬라이싱하여 스크리닝 조건 검사
+                cutoff = datetime.now() - timedelta(days=30 * 6)
+                df = full_df[full_df.index >= cutoff]
+                if len(df) < 2:
+                    continue  # 유효 데이터 부족
                 
                 # 조건 검사 (환율 보정을 위해 ticker 전달)
                 is_match, result_data = ScreenerCondition.check_conditions(
