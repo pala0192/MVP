@@ -5,3 +5,8 @@ FinanceDataReader
 ta
 plotly
 tqdm
+flask
+flask-cors
+scipy
+feedparser
+google-generativeai

@@ -4,21 +4,20 @@ class BacktestSimulator:
     def __init__(self, initial_capital=10000000):
         self.initial_capital = initial_capital
         
-    def run(self, df: pd.DataFrame, period_mode='short', threshold=0.3):
+    def run(self, df: pd.DataFrame, weights: dict, threshold=0.3):
         """
         간단한 백테스트 시뮬레이션
-        period_mode: 'short', 'mid', 'long' 중 하나
+        weights: 특정 기간에 대한 지표별 가중치 딕셔너리
         threshold: 매수/매도 시그널 임계값
         """
+        from probability_engine import ProbabilityEngine
         capital = self.initial_capital
         position = 0
         history = []
         
-        score_col = f'Score_{period_mode.capitalize()}'
-        
         for index, row in df.iterrows():
             price = row['Close']
-            score = row[score_col]
+            score = ProbabilityEngine.apply_ticker_weights(row, weights)
             
             # 매수 시그널
             if score > threshold and capital >= price:

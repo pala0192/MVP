@@ -1,99 +1,112 @@
+"""
+config.py - 시장별 + 종목별 + 기간별 가중치 관리
+"""
 import json
 import os
 
+# 사전 정의 홀딩 기간 (표시 레이블 → 일수 변환)
+HOLDING_PERIODS = {
+    '6h':  0.25,
+    '12h': 0.5,
+    '1d':  1,
+    '3d':  3,
+    '7d':  7,
+    '2w':  14,
+    '4w':  28,
+    '6w':  42,
+    '8w':  56,
+    '10w': 70,
+    '12w': 84,
+    '14w': 98,
+    '16w': 112,
+    '18w': 126,
+    '20w': 140,
+    '22w': 154,
+    '24w': 168,
+    '26w': 182,
+    '28w': 196,
+    '30w': 210,
+}
+
+def period_label_to_days(label: str) -> float:
+    """'6h' → 0.25, '2w' → 14 등 변환"""
+    return HOLDING_PERIODS.get(label, 30)
+
+
+
+def _default_weights_for_days(days: float) -> dict:
+    """기간별 기본 신호 가중치"""
+    if days <= 1:           # 초단기
+        return {'rsi': 0.20, 'stoch': 0.35, 'bollinger': 0.25, 'macd': 0.20}
+    elif days <= 7:         # 단기
+        return {'rsi': 0.30, 'stoch': 0.30, 'bollinger': 0.20, 'macd': 0.20}
+    elif days <= 28:        # 중단기
+        return {'macd': 0.40, 'ema20': 0.30, 'rsi': 0.20, 'bollinger': 0.10}
+    elif days <= 84:        # 중기
+        return {'macd': 0.35, 'ema20': 0.25, 'ema60': 0.20, 'rsi': 0.20}
+    else:                   # 장기
+        return {'ema60': 0.35, 'ema120': 0.25, 'macd': 0.20, 'atr': 0.20}
+
+
 class Config:
+    TICKER_WEIGHT_FILE = 'ticker_weights.json'
+
     def __init__(self):
-        # 투자 모드 (단기/중기/장기 또는 자동 'AUTO')
         self.investment_mode = 'AUTO'
-        self.initial_capital = 10000000  # 1천만원
-        
-        # 보조지표별 기본 가중치 템플릿
-        default_short_weights = {
-            'rsi': 0.3,
-            'stoch': 0.3,
-            'bollinger': 0.2,
-            'macd': 0.2
-        }
-        default_mid_weights = {
-            'macd': 0.4,
-            'ema20': 0.3,
-            'rsi': 0.2,
-            'bollinger': 0.1
-        }
-        default_long_weights = {
-            'ema60': 0.4,
-            'ema120': 0.2,
-            'macd': 0.2,
-            'atr': 0.2
+        self.initial_capital = 10_000_000
+
+        # 20개의 지정된 기간별 독립 가중치 저장소
+        self.base_weights = {
+            label: _default_weights_for_days(days) 
+            for label, days in HOLDING_PERIODS.items()
         }
 
-        # 시장별(미국/한국) 가중치 분리
-        self.us_weights = {
-            'short': default_short_weights.copy(),
-            'mid': default_mid_weights.copy(),
-            'long': default_long_weights.copy()
-        }
-        
-        self.kr_weights = {
-            'short': default_short_weights.copy(),
-            'mid': default_mid_weights.copy(),
-            'long': default_long_weights.copy()
-        }
-        
-    def get_market_weights(self, market):
-        """특정 시장의 전체 가중치(short, mid, long) 반환"""
-        if market.upper() == 'US':
-            return self.us_weights
-        elif market.upper() == 'KR':
-            return self.kr_weights
-        else:
-            raise ValueError(f"Unknown market: {market}")
+        # 종목별 + 기간별 가중치: {ticker: {period_label: {signal: weight}}}
+        self._ticker_weights: dict = {}
 
-    def update_weights(self, market, period, new_weights):
-        """AI 옵티마이저가 특정 시장과 기간의 가중치를 업데이트할 때 사용"""
-        target_weights = self.get_market_weights(market)
-        if period in target_weights:
-            target_weights[period].update(new_weights)
+    # ── 기본 가중치 ──────────────────────────────────────────────────────────
+    def get_base_weights(self) -> dict:
+        return self.base_weights
 
-    def save_to_file(self, filepath='config_weights.json'):
-        """학습된 시장별 가중치를 JSON 파일로 저장합니다."""
-        data = {
-            'US': self.us_weights,
-            'KR': self.kr_weights
-        }
+    def update_weights(self, period: str, new_weights: dict):
+        target = self.get_base_weights()
+        if period in target:
+            target[period].update(new_weights)
+
+    # ── 종목+기간 가중치 ─────────────────────────────────────────────────────
+    def get_ticker_period_weights(self, ticker: str, period_label: str) -> dict:
+        """
+        종목+기간별 저장된 가중치를 반환.
+        없으면 기간별 기본 가중치 반환.
+        """
+        days = period_label_to_days(period_label)
+        default = self.base_weights.get(period_label, _default_weights_for_days(days))
+        return self._ticker_weights.get(ticker, {}).get(period_label, default).copy()
+
+    def update_ticker_period_weights(self, ticker: str, period_label: str, new_weights: dict):
+        """종목+기간 가중치 업데이트 (AI 옵티마이저 호출용)"""
+        if ticker not in self._ticker_weights:
+            self._ticker_weights[ticker] = {}
+        existing = self.get_ticker_period_weights(ticker, period_label)
+        existing.update(new_weights)
+        self._ticker_weights[ticker][period_label] = existing
+
+    def get_all_ticker_weights(self) -> dict:
+        return self._ticker_weights
+
+    # ── 머신러닝 가중치 저장/로드 ─────────────────────────────────────────────────────────────
+
+    def save_ticker_weights(self, filepath=None):
+        filepath = filepath or self.TICKER_WEIGHT_FILE
         with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=4, ensure_ascii=False)
-            
-    def load_from_file(self, filepath='config_weights.json'):
-        """저장된 가중치 JSON 파일을 불러옵니다."""
-        if os.path.exists(filepath):
-            with open(filepath, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                
-                # 기존 레거시 포맷 호환성 지원 (US와 KR 구분 없이 short_weights 등이 바로 있는 경우)
-                if 'short_weights' in data or 'mid_weights' in data or 'long_weights' in data:
-                    print("[Config] 구버전 가중치 파일 감지. US 및 KR 시장의 초기값으로 복사하여 마이그레이션합니다.")
-                    legacy_short = data.get('short_weights', self.us_weights['short'])
-                    legacy_mid = data.get('mid_weights', self.us_weights['mid'])
-                    legacy_long = data.get('long_weights', self.us_weights['long'])
-                    
-                    self.us_weights['short'].update(legacy_short)
-                    self.us_weights['mid'].update(legacy_mid)
-                    self.us_weights['long'].update(legacy_long)
-                    
-                    self.kr_weights['short'].update(legacy_short)
-                    self.kr_weights['mid'].update(legacy_mid)
-                    self.kr_weights['long'].update(legacy_long)
-                    return True
+            json.dump(self._ticker_weights, f, indent=2, ensure_ascii=False)
+        print(f"[Config] 종목별 가중치 저장 → {filepath}")
 
-                # 새로운 포맷 로드
-                if 'US' in data:
-                    for period in ['short', 'mid', 'long']:
-                        self.us_weights[period].update(data['US'].get(period, {}))
-                
-                if 'KR' in data:
-                    for period in ['short', 'mid', 'long']:
-                        self.kr_weights[period].update(data['KR'].get(period, {}))
-                        
-            return True
-        return False
+    def load_ticker_weights(self, filepath=None) -> bool:
+        filepath = filepath or self.TICKER_WEIGHT_FILE
+        if not os.path.exists(filepath):
+            return False
+        with open(filepath, 'r', encoding='utf-8') as f:
+            self._ticker_weights = json.load(f)
+        print(f"[Config] 종목별 가중치 로드 ✓ ({len(self._ticker_weights)} 종목)")
+        return True
