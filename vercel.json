@@ -4,9 +4,17 @@
     {
       "src": "server.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "DMserver.py",
+      "use": "@vercel/python"
     }
   ],
   "routes": [
+    {
+      "src": "/dm/(.*)",
+      "dest": "DMserver.py"
+    },
     {
       "src": "/(.*)",
       "dest": "server.py"

@@ -10,3 +10,5 @@ flask-cors
 scipy
 feedparser
 google-generativeai
+python-dotenv
+requests
