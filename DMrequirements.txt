@@ -1,14 +1,7 @@
-pandas
-numpy
-yfinance
-finance-datareader
-ta
-plotly
-tqdm
 flask
 flask-cors
-scipy
 feedparser
 google-genai
 python-dotenv
 requests
+pandas

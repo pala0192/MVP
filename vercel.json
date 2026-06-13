@@ -7,7 +7,8 @@
     },
     {
       "src": "DMserver.py",
-      "use": "@vercel/python"
+      "use": "@vercel/python",
+      "config": {"requirementsFile": "DMrequirements.txt"}
     }
   ],
   "routes": [

@@ -3,9 +3,6 @@ DMserver.py - 이커머스 고객 이탈 분석 Flask 서버
 실행: python DMserver.py
 접속: http://localhost:5001/dm/
 """
-import sys
-sys.stdout.reconfigure(encoding='utf-8')
-
 from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS
 
